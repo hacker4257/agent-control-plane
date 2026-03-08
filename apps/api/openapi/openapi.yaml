@@ -7,7 +7,7 @@ servers:
 paths:
   /gateway/preflight:
     post:
-      summary: Evaluate tool call before execution
+      summary: Evaluate tool action before execution
       requestBody:
         required: true
         content:
@@ -23,7 +23,13 @@ paths:
                 $ref: '#/components/schemas/PreflightResponse'
   /gateway/postflight:
     post:
-      summary: Record execution result after tool call
+      summary: Record tool action result after execution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostflightRequest'
       responses:
         '202':
           description: Accepted
@@ -100,9 +106,33 @@ components:
         session_id: { type: string }
         step_id: { type: string }
         correlation_id: { type: string }
-        agent: { type: object, additionalProperties: true }
-        tool_call: { type: object, additionalProperties: true }
-      required: [session_id, step_id, correlation_id, agent, tool_call]
+        agent_id: { type: string }
+        user_id: { type: string }
+        environment: { type: string }
+        objective: { type: string }
+        tool: { type: string }
+        action: { type: string }
+        resource: { type: string }
+        input_summary: { type: string }
+        command: { type: string }
+      required: [session_id, step_id, correlation_id, agent_id, environment, tool, action, resource]
+    PostflightRequest:
+      type: object
+      properties:
+        session_id: { type: string }
+        step_id: { type: string }
+        correlation_id: { type: string }
+        agent_id: { type: string }
+        environment: { type: string }
+        tool: { type: string }
+        action: { type: string }
+        resource: { type: string }
+        result: { type: string }
+        output_summary: { type: string }
+        artifact_refs:
+          type: array
+          items: { type: string }
+      required: [session_id, step_id, correlation_id, agent_id, tool, action, resource, result]
     PreflightResponse:
       type: object
       properties:

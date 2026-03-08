@@ -53,13 +53,14 @@ type PostflightInput struct {
 	SessionID     string
 	StepID        string
 	CorrelationID string
+	AgentID       string
+	Environment   string
 	Tool          string
 	Action        string
 	Resource      string
 	Result        string
 	OutputSummary string
 	ArtifactRefs  []string
-	ActorID       string
 }
 
 func NewGatewayService(store GatewayStore) *GatewayService {
@@ -72,8 +73,9 @@ func (s *GatewayService) ProcessPreflight(ctx context.Context, in PreflightInput
 		return resp, nil
 	}
 
+	eventID := uuid.NewString()
 	e := repo.EventRecord{
-		EventID:          uuid.NewString(),
+		EventID:          eventID,
 		SessionID:        in.SessionID,
 		StepID:           in.StepID,
 		CorrelationID:    in.CorrelationID,
@@ -82,6 +84,7 @@ func (s *GatewayService) ProcessPreflight(ctx context.Context, in PreflightInput
 		Tool:             lower(in.Tool),
 		Action:           lower(in.Action),
 		Resource:         in.Resource,
+		RiskScore:        riskScoreFromDecision(resp.Decision),
 		RiskTags:         resp.RiskTags,
 		MatchedPolicyIDs: resp.MatchedPolicyIDs,
 		ReasonCode:       resp.ReasonCode,
@@ -119,9 +122,10 @@ func (s *GatewayService) ProcessPreflight(ctx context.Context, in PreflightInput
 			ApprovalID:      approvalID,
 			SessionID:       in.SessionID,
 			StepID:          in.StepID,
+			EventID:         eventID,
 			Status:          "pending",
-			Action:          in.Action,
-			Tool:            in.Tool,
+			Action:          lower(in.Action),
+			Tool:            lower(in.Tool),
 			Resource:        in.Resource,
 			Objective:       in.Objective,
 			TriggerReason:   resp.ReasonText,
@@ -145,14 +149,14 @@ func (s *GatewayService) ProcessPostflight(ctx context.Context, in PostflightInp
 		SessionID:     in.SessionID,
 		StepID:        in.StepID,
 		CorrelationID: in.CorrelationID,
-		EventType:     normalizePostflightResult(in.Result),
+		EventType:     eventTypeForPostflightResult(in.Result),
 		Tool:          lower(in.Tool),
 		Action:        lower(in.Action),
 		Resource:      in.Resource,
 		OutputSummary: in.OutputSummary,
 		ArtifactRefs:  in.ArtifactRefs,
 		ActorType:     "agent",
-		ActorID:       in.ActorID,
+		ActorID:       in.AgentID,
 	}
 	if err := s.store.InsertEvent(ctx, e); err != nil {
 		return err
@@ -160,14 +164,14 @@ func (s *GatewayService) ProcessPostflight(ctx context.Context, in PostflightInp
 
 	return s.store.UpsertSessionProjection(ctx, repo.SessionProjectionUpdate{
 		SessionID:   in.SessionID,
-		AgentID:     in.ActorID,
-		Environment: "unknown",
+		AgentID:     in.AgentID,
+		Environment: in.Environment,
 		Objective:   "Agent task",
 		Status:      sessionStatusFromPostflightResult(in.Result),
-		RiskScore:   10,
+		RiskScore:   riskScoreFromPostflightResult(in.Result),
 		Resource:    in.Resource,
 		IsApproval:  false,
-		IsBlocked:   normalizePostflightResult(in.Result) == "failed",
+		IsBlocked:   lower(in.Result) == "failed",
 	})
 }
 
@@ -240,22 +244,20 @@ func isDangerousShell(v string) bool {
 func eventTypeForDecision(decision string) string {
 	switch decision {
 	case "BLOCK":
-		return "blocked"
+		return "policy_blocked"
 	case "REQUIRE_APPROVAL":
 		return "approval_requested"
 	default:
-		return "requested"
+		return "tool_requested"
 	}
 }
 
-func normalizePostflightResult(result string) string {
+func eventTypeForPostflightResult(result string) string {
 	switch lower(result) {
 	case "failed":
-		return "failed"
-	case "executed":
-		return "executed"
+		return "tool_failed"
 	default:
-		return "executed"
+		return "tool_completed"
 	}
 }
 
@@ -287,5 +289,14 @@ func riskScoreFromDecision(decision string) int {
 		return 85
 	default:
 		return 30
+	}
+}
+
+func riskScoreFromPostflightResult(result string) int {
+	switch lower(result) {
+	case "failed":
+		return 60
+	default:
+		return 10
 	}
 }

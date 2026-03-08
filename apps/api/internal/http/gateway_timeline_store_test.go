@@ -108,16 +108,12 @@ func TestPreflightPersistsEvent(t *testing.T) {
 		SessionID:     "sess_1",
 		StepID:        "step_1",
 		CorrelationID: "corr_1",
-		Agent: map[string]interface{}{
-			"agent_id":    "coding-agent-prod",
-			"environment": "prod",
-		},
-		ToolCall: map[string]interface{}{
-			"tool":          "github",
-			"action":        "push",
-			"resource":      "repo:org/api-service/branch:main",
-			"input_summary": "push commit fix(auth)",
-		},
+		AgentID:       "coding-agent-prod",
+		Environment:   "prod",
+		Tool:          "github",
+		Action:        "push",
+		Resource:      "repo:org/api-service/branch:main",
+		InputSummary:  "push commit fix(auth)",
 	}
 	body, _ := json.Marshal(payload)
 
@@ -146,6 +142,9 @@ func TestPreflightPersistsEvent(t *testing.T) {
 	if store.createdApprovals[0].Status != "pending" {
 		t.Fatalf("expected pending approval status, got %s", store.createdApprovals[0].Status)
 	}
+	if store.createdApprovals[0].EventID == "" {
+		t.Fatal("expected approval to be linked to event_id")
+	}
 }
 
 func TestPostflightPersistsEvent(t *testing.T) {
@@ -157,13 +156,14 @@ func TestPostflightPersistsEvent(t *testing.T) {
 		SessionID:     "sess_1",
 		StepID:        "step_1",
 		CorrelationID: "corr_1",
+		AgentID:       "coding-agent-prod",
+		Environment:   "prod",
 		Tool:          "github",
 		Action:        "create_pull_request",
 		Resource:      "repo:org/api-service/branch:feature-x",
-		Result:        "executed",
+		Result:        "completed",
 		OutputSummary: "created PR #4182",
 		ArtifactRefs:  []string{"art_1"},
-		ActorID:       "coding-agent-prod",
 	}
 	body, _ := json.Marshal(payload)
 
@@ -177,8 +177,8 @@ func TestPostflightPersistsEvent(t *testing.T) {
 	if len(store.inserted) != 1 {
 		t.Fatalf("expected 1 inserted event, got %d", len(store.inserted))
 	}
-	if store.inserted[0].EventType != "executed" {
-		t.Fatalf("expected executed event type, got %s", store.inserted[0].EventType)
+	if store.inserted[0].EventType != "tool_completed" {
+		t.Fatalf("expected tool_completed event type, got %s", store.inserted[0].EventType)
 	}
 	if len(store.projectionUpdates) != 1 {
 		t.Fatalf("expected 1 projection update, got %d", len(store.projectionUpdates))
@@ -197,7 +197,7 @@ func TestTimelineReadsFromStore(t *testing.T) {
 				SessionID:     "sess_1",
 				StepID:        "step_1",
 				CorrelationID: "corr_1",
-				EventType:     "blocked",
+				EventType:     "policy_blocked",
 				Decision:      "BLOCK",
 				Tool:          "shell",
 				Action:        "exec",
@@ -238,12 +238,13 @@ func TestPostflightFailedSetsBlockedProjection(t *testing.T) {
 		SessionID:     "sess_2",
 		StepID:        "step_2",
 		CorrelationID: "corr_2",
+		AgentID:       "ops-agent",
+		Environment:   "prod",
 		Tool:          "shell",
 		Action:        "exec",
 		Resource:      "host:prod",
 		Result:        "failed",
 		OutputSummary: "command failed",
-		ActorID:       "ops-agent",
 	}
 	body, _ := json.Marshal(payload)
 
@@ -271,16 +272,12 @@ func TestPreflightProjectionFailure(t *testing.T) {
 		SessionID:     "sess_1",
 		StepID:        "step_1",
 		CorrelationID: "corr_1",
-		Agent: map[string]interface{}{
-			"agent_id":    "coding-agent-prod",
-			"environment": "prod",
-		},
-		ToolCall: map[string]interface{}{
-			"tool":          "github",
-			"action":        "push",
-			"resource":      "repo:org/api-service/branch:main",
-			"input_summary": "push commit fix(auth)",
-		},
+		AgentID:       "coding-agent-prod",
+		Environment:   "prod",
+		Tool:          "github",
+		Action:        "push",
+		Resource:      "repo:org/api-service/branch:main",
+		InputSummary:  "push commit fix(auth)",
 	}
 	body, _ := json.Marshal(payload)
 

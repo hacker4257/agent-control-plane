@@ -3,16 +3,24 @@ package httpx
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"agent-control-plane/apps/api/internal/service"
 )
 
 type preflightRequest struct {
-	SessionID     string                 `json:"session_id"`
-	StepID        string                 `json:"step_id"`
-	CorrelationID string                 `json:"correlation_id"`
-	Agent         map[string]interface{} `json:"agent"`
-	ToolCall      map[string]interface{} `json:"tool_call"`
+	SessionID     string `json:"session_id"`
+	StepID        string `json:"step_id"`
+	CorrelationID string `json:"correlation_id"`
+	AgentID       string `json:"agent_id"`
+	UserID        string `json:"user_id"`
+	Environment   string `json:"environment"`
+	Objective     string `json:"objective"`
+	Tool          string `json:"tool"`
+	Action        string `json:"action"`
+	Resource      string `json:"resource"`
+	InputSummary  string `json:"input_summary"`
+	Command       string `json:"command"`
 }
 
 type preflightResponse = service.PreflightOutput
@@ -21,13 +29,14 @@ type postflightRequest struct {
 	SessionID     string   `json:"session_id"`
 	StepID        string   `json:"step_id"`
 	CorrelationID string   `json:"correlation_id"`
+	AgentID       string   `json:"agent_id"`
+	Environment   string   `json:"environment"`
 	Tool          string   `json:"tool"`
 	Action        string   `json:"action"`
 	Resource      string   `json:"resource"`
 	Result        string   `json:"result"`
 	OutputSummary string   `json:"output_summary"`
 	ArtifactRefs  []string `json:"artifact_refs"`
-	ActorID       string   `json:"actor_id"`
 }
 
 func registerGatewayRoutes(r interface{ Post(string, http.HandlerFunc) }) {
@@ -54,18 +63,18 @@ func handlePreflight(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := gatewaySvc.ProcessPreflight(r.Context(), service.PreflightInput{
-		SessionID:     req.SessionID,
-		StepID:        req.StepID,
-		CorrelationID: req.CorrelationID,
-		AgentID:       getField(req.Agent, "agent_id"),
-		UserID:        getField(req.Agent, "user_id"),
-		Environment:   getField(req.Agent, "environment"),
-		Objective:     getField(req.Agent, "objective"),
-		Tool:          getField(req.ToolCall, "tool"),
-		Action:        getField(req.ToolCall, "action"),
-		Resource:      getField(req.ToolCall, "resource"),
-		InputSummary:  getField(req.ToolCall, "input_summary"),
-		Command:       getField(req.ToolCall, "command"),
+		SessionID:     strings.TrimSpace(req.SessionID),
+		StepID:        strings.TrimSpace(req.StepID),
+		CorrelationID: strings.TrimSpace(req.CorrelationID),
+		AgentID:       strings.TrimSpace(req.AgentID),
+		UserID:        strings.TrimSpace(req.UserID),
+		Environment:   strings.TrimSpace(req.Environment),
+		Objective:     strings.TrimSpace(req.Objective),
+		Tool:          strings.TrimSpace(req.Tool),
+		Action:        strings.TrimSpace(req.Action),
+		Resource:      strings.TrimSpace(req.Resource),
+		InputSummary:  strings.TrimSpace(req.InputSummary),
+		Command:       strings.TrimSpace(req.Command),
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "failed to process preflight", nil)
@@ -87,35 +96,21 @@ func handlePostflight(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := gatewaySvc.ProcessPostflight(r.Context(), service.PostflightInput{
-		SessionID:     req.SessionID,
-		StepID:        req.StepID,
-		CorrelationID: req.CorrelationID,
-		Tool:          req.Tool,
-		Action:        req.Action,
-		Resource:      req.Resource,
-		Result:        req.Result,
-		OutputSummary: req.OutputSummary,
+		SessionID:     strings.TrimSpace(req.SessionID),
+		StepID:        strings.TrimSpace(req.StepID),
+		CorrelationID: strings.TrimSpace(req.CorrelationID),
+		AgentID:       strings.TrimSpace(req.AgentID),
+		Environment:   strings.TrimSpace(req.Environment),
+		Tool:          strings.TrimSpace(req.Tool),
+		Action:        strings.TrimSpace(req.Action),
+		Resource:      strings.TrimSpace(req.Resource),
+		Result:        strings.TrimSpace(req.Result),
+		OutputSummary: strings.TrimSpace(req.OutputSummary),
 		ArtifactRefs:  req.ArtifactRefs,
-		ActorID:       req.ActorID,
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "STORE_ERROR", "failed to process postflight", nil)
 		return
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]bool{"accepted": true})
-}
-
-func getField(m map[string]interface{}, key string) string {
-	if m == nil {
-		return ""
-	}
-	v, ok := m[key]
-	if !ok {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
 }

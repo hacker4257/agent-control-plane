@@ -21,10 +21,63 @@ function fmtTime(value) {
 
 function decisionClass(value) {
   const v = String(value || '').toLowerCase()
-  if (v === 'allow' || v === 'approved' || v === 'enabled') return 'ok'
-  if (v === 'block' || v === 'rejected' || v === 'disabled') return 'danger'
-  if (v === 'require_approval' || v === 'pending') return 'warn'
+  if (
+    v === 'allow' ||
+    v === 'approved' ||
+    v === 'enabled' ||
+    v === 'tool_requested' ||
+    v === 'tool_completed' ||
+    v === 'completed'
+  ) return 'ok'
+  if (
+    v === 'block' ||
+    v === 'rejected' ||
+    v === 'disabled' ||
+    v === 'policy_blocked' ||
+    v === 'tool_failed' ||
+    v === 'blocked'
+  ) return 'danger'
+  if (v === 'require_approval' || v === 'pending' || v === 'approval_requested' || v === 'approval_pending') return 'warn'
   return 'neutral'
+}
+
+function humanizeEventType(eventType) {
+  switch (eventType) {
+    case 'tool_requested':
+      return 'Tool Requested'
+    case 'policy_blocked':
+      return 'Policy Blocked'
+    case 'approval_requested':
+      return 'Approval Requested'
+    case 'tool_completed':
+      return 'Tool Completed'
+    case 'tool_failed':
+      return 'Tool Failed'
+    default:
+      return eventType || '-'
+  }
+}
+
+function eventSummary(event) {
+  switch (event.event_type) {
+    case 'tool_requested':
+      return `${event.tool || 'tool'} requested ${event.action || 'action'}`
+    case 'policy_blocked':
+      return `${event.tool || 'tool'} was blocked by policy`
+    case 'approval_requested':
+      return `${event.tool || 'tool'} requires human approval`
+    case 'tool_completed':
+      return `${event.tool || 'tool'} completed successfully`
+    case 'tool_failed':
+      return `${event.tool || 'tool'} failed during execution`
+    default:
+      return event.reason_text || event.input_summary || event.output_summary || 'No summary'
+  }
+}
+
+function renderList(values) {
+  if (!values || !values.length) return '-'
+  return values.join(', ')
 }
 
 function SectionCard({ title, actions, status, children }) {
@@ -97,54 +150,114 @@ function SessionTable({ sessions, selectedSessionId, onSelect }) {
   )
 }
 
-function SessionDetail({ session, timeline }) {
+function SessionOverview({ session }) {
   if (!session) {
-    return <div className="empty">Select a session to view details and timeline.</div>
+    return <div className="empty">Select a session to inspect the agent behavior.</div>
   }
 
   return (
-    <div className="detail-layout">
-      <div className="detail-panel">
-        <h3>Session Detail</h3>
-        <dl className="detail-grid">
-          <dt>Session ID</dt><dd>{session.session_id}</dd>
-          <dt>Agent</dt><dd>{session.agent_id || '-'}</dd>
-          <dt>User</dt><dd>{session.user_id || '-'}</dd>
-          <dt>Status</dt><dd>{session.status || '-'}</dd>
-          <dt>Environment</dt><dd>{session.environment || '-'}</dd>
-          <dt>Objective</dt><dd>{session.objective || '-'}</dd>
-          <dt>Risk Score</dt><dd>{session.risk_score ?? '-'}</dd>
-          <dt>Approvals</dt><dd>{session.approvals_count ?? 0}</dd>
-          <dt>Blocked</dt><dd>{session.blocked_count ?? 0}</dd>
-          <dt>Last Event</dt><dd>{fmtTime(session.last_event_at)}</dd>
-        </dl>
+    <div className="detail-panel session-overview-panel">
+      <h3>Session Overview</h3>
+      <dl className="detail-grid">
+        <dt>Session ID</dt><dd>{session.session_id}</dd>
+        <dt>Agent</dt><dd>{session.agent_id || '-'}</dd>
+        <dt>User</dt><dd>{session.user_id || '-'}</dd>
+        <dt>Status</dt><dd><span className={`tag ${decisionClass(session.status)}`}>{session.status || '-'}</span></dd>
+        <dt>Environment</dt><dd>{session.environment || '-'}</dd>
+        <dt>Objective</dt><dd>{session.objective || '-'}</dd>
+        <dt>Risk Score</dt><dd>{session.risk_score ?? '-'}</dd>
+        <dt>Approvals</dt><dd>{session.approvals_count ?? 0}</dd>
+        <dt>Blocked</dt><dd>{session.blocked_count ?? 0}</dd>
+        <dt>Resources</dt><dd>{renderList(session.touched_resources)}</dd>
+        <dt>Last Event</dt><dd>{fmtTime(session.last_event_at)}</dd>
+      </dl>
+    </div>
+  )
+}
+
+function TimelineList({ timeline, selectedEventId, onSelect }) {
+  if (!timeline.length) {
+    return <div className="empty">No timeline events</div>
+  }
+
+  return (
+    <ul className="timeline-list">
+      {timeline.map((event) => (
+        <li
+          key={event.event_id}
+          className={`timeline-item ${selectedEventId === event.event_id ? 'timeline-item-selected' : ''}`}
+          onClick={() => onSelect(event.event_id)}
+        >
+          <div className="timeline-meta">
+            <span className={`tag ${decisionClass(event.event_type || event.decision)}`}>
+              {humanizeEventType(event.event_type)}
+            </span>
+            <span>{fmtTime(event.created_at)}</span>
+          </div>
+          <div className="timeline-main">
+            <strong>{event.tool || event.action || 'event'}</strong>
+            <p>{eventSummary(event)}</p>
+            <small>
+              action: {event.action || '-'} · resource: {event.resource || '-'} · actor: {event.actor_id || '-'}
+            </small>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function EventDetail({ event }) {
+  if (!event) {
+    return <div className="empty">Select a timeline event to inspect details.</div>
+  }
+
+  return (
+    <div className="detail-panel event-detail-panel">
+      <h3>Event Detail</h3>
+      <div className="event-headline">
+        <span className={`tag ${decisionClass(event.event_type || event.decision)}`}>{humanizeEventType(event.event_type)}</span>
+        <strong>{eventSummary(event)}</strong>
       </div>
-      <div className="detail-panel">
-        <h3>Timeline</h3>
-        {!timeline.length ? (
-          <div className="empty">No timeline events</div>
-        ) : (
-          <ul className="timeline-list">
-            {timeline.map((event) => (
-              <li key={event.event_id} className="timeline-item">
-                <div className="timeline-meta">
-                  <span className={`tag ${decisionClass(event.decision || event.event_type)}`}>
-                    {event.event_type || '-'}
-                  </span>
-                  <span>{fmtTime(event.created_at)}</span>
-                </div>
-                <div className="timeline-main">
-                  <strong>{event.tool || event.action || 'event'}</strong>
-                  <p>{event.reason_text || event.input_summary || '-'}</p>
-                  <small>
-                    resource: {event.resource || '-'} · decision: {event.decision || '-'} · actor: {event.actor_id || '-'}
-                  </small>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      <dl className="detail-grid">
+        <dt>Event ID</dt><dd>{event.event_id}</dd>
+        <dt>Session ID</dt><dd>{event.session_id || '-'}</dd>
+        <dt>Step ID</dt><dd>{event.step_id || '-'}</dd>
+        <dt>Correlation ID</dt><dd>{event.correlation_id || '-'}</dd>
+        <dt>Tool</dt><dd>{event.tool || '-'}</dd>
+        <dt>Action</dt><dd>{event.action || '-'}</dd>
+        <dt>Resource</dt><dd>{event.resource || '-'}</dd>
+        <dt>Decision</dt><dd>{event.decision || '-'}</dd>
+        <dt>Reason Code</dt><dd>{event.reason_code || '-'}</dd>
+        <dt>Reason Text</dt><dd>{event.reason_text || '-'}</dd>
+        <dt>Risk Score</dt><dd>{event.risk_score ?? '-'}</dd>
+        <dt>Risk Tags</dt><dd>{renderList(event.risk_tags)}</dd>
+        <dt>Policies</dt><dd>{renderList(event.matched_policy_ids)}</dd>
+        <dt>Input Summary</dt><dd>{event.input_summary || '-'}</dd>
+        <dt>Output Summary</dt><dd>{event.output_summary || '-'}</dd>
+        <dt>Artifacts</dt><dd>{renderList(event.artifact_refs)}</dd>
+        <dt>Actor Type</dt><dd>{event.actor_type || '-'}</dd>
+        <dt>Actor ID</dt><dd>{event.actor_id || '-'}</dd>
+        <dt>Created At</dt><dd>{fmtTime(event.created_at)}</dd>
+      </dl>
+    </div>
+  )
+}
+
+function ObservabilityPanel({ session, timeline, selectedEventId, onSelectEvent }) {
+  const selectedEvent = useMemo(
+    () => timeline.find((item) => item.event_id === selectedEventId) || null,
+    [timeline, selectedEventId],
+  )
+
+  return (
+    <div className="observability-layout">
+      <SessionOverview session={session} />
+      <div className="detail-panel trace-panel">
+        <h3>Behavior Timeline</h3>
+        <TimelineList timeline={timeline} selectedEventId={selectedEventId} onSelect={onSelectEvent} />
       </div>
+      <EventDetail event={selectedEvent} />
     </div>
   )
 }
@@ -163,6 +276,7 @@ function ApprovalsTable({ approvals, onDecision, busyId }) {
             <th>Action</th>
             <th>Tool</th>
             <th>Resource</th>
+            <th>Reason</th>
             <th>Requested At</th>
             <th>Action</th>
           </tr>
@@ -174,6 +288,7 @@ function ApprovalsTable({ approvals, onDecision, busyId }) {
               <td>{approval.action || '-'}</td>
               <td>{approval.tool || '-'}</td>
               <td>{approval.resource || '-'}</td>
+              <td>{approval.trigger_reason || '-'}</td>
               <td>{fmtTime(approval.requested_at)}</td>
               <td>
                 <div className="actions">
@@ -245,6 +360,7 @@ export default function App() {
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const [sessionDetail, setSessionDetail] = useState(null)
   const [timeline, setTimeline] = useState([])
+  const [selectedEventId, setSelectedEventId] = useState('')
   const [approvals, setApprovals] = useState([])
   const [policies, setPolicies] = useState([])
 
@@ -291,21 +407,25 @@ export default function App() {
     if (!sessionId) {
       setSessionDetail(null)
       setTimeline([])
+      setSelectedEventId('')
       return
     }
 
-    setDetailStatus({ message: 'Loading session detail...' })
+    setDetailStatus({ message: 'Loading session trace...' })
     try {
       const [detail, timelineData] = await Promise.all([
         loadSessionDetail(apiBase, sessionId),
         loadSessionTimeline(apiBase, sessionId),
       ])
+      const items = timelineData.items || []
       setSessionDetail(detail)
-      setTimeline(timelineData.items || [])
+      setTimeline(items)
+      setSelectedEventId(items[items.length - 1]?.event_id || '')
       setDetailStatus({ message: `Loaded ${sessionId}`, type: 'ok' })
     } catch (error) {
       setSessionDetail(null)
       setTimeline([])
+      setSelectedEventId('')
       setDetailStatus({ message: error.message, type: 'error' })
     }
   }
@@ -346,7 +466,7 @@ export default function App() {
     try {
       await decideApproval(apiBase, approvalId, decision)
       setApprovalsStatus({ message: `Applied ${decision} on ${approvalId}`, type: 'ok' })
-      await Promise.all([refreshApprovals(), refreshSummary()])
+      await Promise.all([refreshApprovals(), refreshSummary(), refreshSessionDetail(selectedSessionId)])
     } catch (error) {
       setApprovalsStatus({ message: error.message, type: 'error' })
     } finally {
@@ -391,7 +511,7 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>Agent Control Plane</h1>
-          <p className="subtitle">React control console for ACP MVP</p>
+          <p className="subtitle">Gateway observability console for external agent behavior</p>
         </div>
         <div className="api-config">
           <label htmlFor="apiBase">API Base</label>
@@ -428,11 +548,16 @@ export default function App() {
         </SectionCard>
 
         <SectionCard
-          title={selectedSession ? `Session Detail · ${selectedSession.session_id}` : 'Session Detail & Timeline'}
+          title={selectedSession ? `Observability Trace · ${selectedSession.session_id}` : 'Observability Trace'}
           status={detailStatus}
           actions={selectedSessionId ? <button onClick={() => refreshSessionDetail(selectedSessionId)}>Refresh</button> : null}
         >
-          <SessionDetail session={sessionDetail || selectedSession} timeline={timeline} />
+          <ObservabilityPanel
+            session={sessionDetail || selectedSession}
+            timeline={timeline}
+            selectedEventId={selectedEventId}
+            onSelectEvent={setSelectedEventId}
+          />
         </SectionCard>
 
         <SectionCard

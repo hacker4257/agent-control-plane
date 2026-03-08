@@ -3,32 +3,42 @@ package httpx
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
-func TestRootServesFrontendIndex(t *testing.T) {
+func TestRootDoesNotServeFrontendIndex(t *testing.T) {
 	r := NewRouter()
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-	if !strings.Contains(rr.Body.String(), "<title>Agent Control Plane</title>") {
-		t.Fatalf("expected frontend index at root")
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
 	}
 }
 
-func TestFrontendAssetPathServedByAPI(t *testing.T) {
+func TestFrontendAssetPathNotServedByAPI(t *testing.T) {
 	r := NewRouter()
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/app.js", nil))
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "const state =") {
-		t.Fatalf("expected frontend asset content")
+}
+
+func TestAPIRespondsWithCORSHeaders(t *testing.T) {
+	r := NewRouter()
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/dashboard/summary", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	rr := httptest.NewRecorder()
+
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rr.Code)
+	}
+	if rr.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("expected wildcard CORS origin, got %q", rr.Header().Get("Access-Control-Allow-Origin"))
 	}
 }

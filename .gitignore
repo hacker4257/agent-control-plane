@@ -18,6 +18,7 @@ Thumbs.db
 # Dependency and tooling caches
 **/.cache/
 **/tmp/
+**/node_modules/
 
 # Runtime storage
 storage/

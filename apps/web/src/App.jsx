@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  createWebSocket,
   decideApproval,
   getInitialApiBase,
   loadApprovals,
@@ -495,8 +496,17 @@ export default function App() {
 
   useEffect(() => {
     refreshAll()
-    const id = setInterval(refreshAll, 5000)
-    return () => clearInterval(id)
+    const id = setInterval(refreshAll, 30000)
+    const closeWs = createWebSocket(apiBase, (msg) => {
+      if (msg.type === 'preflight' || msg.type === 'postflight') {
+        refreshAll()
+        if (selectedSessionId) refreshSessionDetail(selectedSessionId)
+      }
+    })
+    return () => {
+      clearInterval(id)
+      closeWs()
+    }
   }, [apiBase])
 
   useEffect(() => {

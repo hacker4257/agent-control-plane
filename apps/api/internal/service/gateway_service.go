@@ -8,16 +8,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	policyShellDangerous = "pol_deny_shell_dangerous_commands"
-	policyGithubMain     = "pol_github_main_branch_protection"
-	policyBrowserPay     = "pol_browser_financial_action_guard"
-)
-
 type GatewayStore interface {
 	InsertEvent(ctx context.Context, e repo.EventRecord) error
 	UpsertSessionProjection(ctx context.Context, u repo.SessionProjectionUpdate) error
 	CreateApproval(ctx context.Context, a repo.ApprovalRecord) error
+	ListPolicyRules(ctx context.Context, enabledOnly bool, limit, offset int) ([]repo.PolicyRule, error)
 }
 
 type GatewayService struct {
@@ -68,9 +63,13 @@ func NewGatewayService(store GatewayStore) *GatewayService {
 }
 
 func (s *GatewayService) ProcessPreflight(ctx context.Context, in PreflightInput) (PreflightOutput, error) {
-	resp := decidePreflight(in)
 	if s == nil || s.store == nil {
-		return resp, nil
+		return defaultAllowResponse(), nil
+	}
+
+	resp, err := s.evaluatePreflight(ctx, in)
+	if err != nil {
+		return PreflightOutput{}, err
 	}
 
 	eventID := uuid.NewString()
@@ -139,6 +138,52 @@ func (s *GatewayService) ProcessPreflight(ctx context.Context, in PreflightInput
 	return resp, nil
 }
 
+func (s *GatewayService) evaluatePreflight(ctx context.Context, in PreflightInput) (PreflightOutput, error) {
+	rules, err := s.store.ListPolicyRules(ctx, true, 200, 0)
+	if err != nil {
+		return PreflightOutput{}, err
+	}
+
+	result := repo.EvaluatePolicies(
+		rules,
+		in.Tool,
+		in.Action,
+		in.Resource,
+		in.Environment,
+		in.AgentID,
+		in.InputSummary+" "+in.Command,
+	)
+
+	out := PreflightOutput{
+		Decision:         result.Decision,
+		DecisionID:       "dec_" + lower(result.Decision),
+		MatchedPolicyIDs: result.MatchedPolicyIDs,
+		ReasonCode:       "DEFAULT_ALLOW",
+		ReasonText:       "No policy matched",
+		RiskTags:         []string{},
+	}
+
+	if result.WinningRule != nil {
+		out.ReasonCode = result.WinningRule.PolicyID
+		out.ReasonText = result.WinningRule.Name
+		if result.WinningRule.Description != "" {
+			out.ReasonText = result.WinningRule.Description
+		}
+		tags := []string{}
+		if t := lower(in.Tool); t != "" {
+			tags = append(tags, t)
+		}
+		if result.Decision == "BLOCK" {
+			tags = append(tags, "blocked_action")
+		} else if result.Decision == "REQUIRE_APPROVAL" {
+			tags = append(tags, "approval_required")
+		}
+		out.RiskTags = tags
+	}
+
+	return out, nil
+}
+
 func (s *GatewayService) ProcessPostflight(ctx context.Context, in PostflightInput) error {
 	if s == nil || s.store == nil {
 		return nil
@@ -175,51 +220,10 @@ func (s *GatewayService) ProcessPostflight(ctx context.Context, in PostflightInp
 	})
 }
 
-func decidePreflight(in PreflightInput) PreflightOutput {
-	tool := lower(in.Tool)
-	action := lower(in.Action)
-	resource := lower(in.Resource)
-	inputSummary := lower(in.InputSummary)
-	command := lower(in.Command)
-	environment := lower(in.Environment)
-
-	if tool == "shell" && isDangerousShell(inputSummary+" "+command) {
-		return PreflightOutput{
-			Decision:         "BLOCK",
-			DecisionID:       "dec_block_shell_dangerous",
-			MatchedPolicyIDs: []string{policyShellDangerous},
-			ReasonCode:       "SHELL_DANGEROUS_COMMAND",
-			ReasonText:       "Dangerous shell command pattern detected",
-			RiskTags:         []string{"destructive_action", "shell"},
-		}
-	}
-
-	if tool == "github" && action == "push" && environment == "prod" && strings.Contains(resource, "branch:main") {
-		return PreflightOutput{
-			Decision:         "REQUIRE_APPROVAL",
-			DecisionID:       "dec_require_approval_github_main",
-			MatchedPolicyIDs: []string{policyGithubMain},
-			ReasonCode:       "PROTECTED_BRANCH_WRITE",
-			ReasonText:       "Push to main branch in prod requires approval",
-			RiskTags:         []string{"repo_write", "protected_branch"},
-			ApprovalID:       "appr_github_main_001",
-		}
-	}
-
-	if tool == "browser" && action == "submit" && strings.Contains(resource, "payment") {
-		return PreflightOutput{
-			Decision:         "BLOCK",
-			DecisionID:       "dec_block_browser_payment",
-			MatchedPolicyIDs: []string{policyBrowserPay},
-			ReasonCode:       "FINANCIAL_SUBMIT_BLOCKED",
-			ReasonText:       "Browser submit on payment resource is blocked",
-			RiskTags:         []string{"financial_action", "browser"},
-		}
-	}
-
+func defaultAllowResponse() PreflightOutput {
 	return PreflightOutput{
 		Decision:         "ALLOW",
-		DecisionID:       "dec_default_allow",
+		DecisionID:       "dec_allow",
 		MatchedPolicyIDs: []string{},
 		ReasonCode:       "DEFAULT_ALLOW",
 		ReasonText:       "No policy matched",
@@ -229,16 +233,6 @@ func decidePreflight(in PreflightInput) PreflightOutput {
 
 func lower(v string) string {
 	return strings.ToLower(strings.TrimSpace(v))
-}
-
-func isDangerousShell(v string) bool {
-	patterns := []string{"rm -rf", "sudo", "curl | sh", "curl|sh"}
-	for _, p := range patterns {
-		if strings.Contains(v, p) {
-			return true
-		}
-	}
-	return false
 }
 
 func eventTypeForDecision(decision string) string {

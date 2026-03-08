@@ -2,13 +2,50 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"agent-control-plane/apps/api/internal/repo"
 	"agent-control-plane/apps/api/internal/service"
 )
+
+type fakeGatewayStore struct {
+	rules []repo.PolicyRule
+}
+
+func (s *fakeGatewayStore) InsertEvent(ctx context.Context, e repo.EventRecord) error { return nil }
+func (s *fakeGatewayStore) UpsertSessionProjection(ctx context.Context, u repo.SessionProjectionUpdate) error {
+	return nil
+}
+func (s *fakeGatewayStore) CreateApproval(ctx context.Context, a repo.ApprovalRecord) error {
+	return nil
+}
+func (s *fakeGatewayStore) ListPolicyRules(ctx context.Context, enabledOnly bool, limit, offset int) ([]repo.PolicyRule, error) {
+	return s.rules, nil
+}
+
+func testPolicyRules() []repo.PolicyRule {
+	return []repo.PolicyRule{
+		{
+			PolicyID: "pol_test_shell", ScopeTool: "shell",
+			ConditionExpr: map[string]interface{}{"command_patterns": []interface{}{"rm -rf", "sudo", "curl|sh"}},
+			Decision: "BLOCK", Priority: 5, Enabled: true,
+		},
+		{
+			PolicyID: "pol_test_github_main", ScopeTool: "github", ScopeEnvironment: "prod",
+			ConditionExpr: map[string]interface{}{"action": "push", "resource_contains": "branch:main"},
+			Decision: "REQUIRE_APPROVAL", Priority: 10, Enabled: true,
+		},
+		{
+			PolicyID: "pol_test_browser_pay", ScopeTool: "browser",
+			ConditionExpr: map[string]interface{}{"action": "submit", "resource_contains": "payment"},
+			Decision: "BLOCK", Priority: 15, Enabled: true,
+		},
+	}
+}
 
 func TestPreflightBadJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/gateway/preflight", bytes.NewBufferString("{"))
@@ -22,7 +59,7 @@ func TestPreflightBadJSON(t *testing.T) {
 }
 
 func TestPreflightShellDangerousBlocked(t *testing.T) {
-	gatewaySvc = service.NewGatewayService(nil)
+	gatewaySvc = service.NewGatewayService(&fakeGatewayStore{rules: testPolicyRules()})
 	t.Cleanup(func() { gatewaySvc = nil })
 
 	payload := preflightRequest{
@@ -58,7 +95,7 @@ func TestPreflightShellDangerousBlocked(t *testing.T) {
 }
 
 func TestPreflightGithubMainRequiresApproval(t *testing.T) {
-	gatewaySvc = service.NewGatewayService(nil)
+	gatewaySvc = service.NewGatewayService(&fakeGatewayStore{rules: testPolicyRules()})
 	t.Cleanup(func() { gatewaySvc = nil })
 
 	payload := preflightRequest{
@@ -91,7 +128,7 @@ func TestPreflightGithubMainRequiresApproval(t *testing.T) {
 }
 
 func TestPreflightBrowserPaymentBlocked(t *testing.T) {
-	gatewaySvc = service.NewGatewayService(nil)
+	gatewaySvc = service.NewGatewayService(&fakeGatewayStore{rules: testPolicyRules()})
 	t.Cleanup(func() { gatewaySvc = nil })
 
 	payload := preflightRequest{
@@ -121,7 +158,7 @@ func TestPreflightBrowserPaymentBlocked(t *testing.T) {
 }
 
 func TestPreflightDefaultAllow(t *testing.T) {
-	gatewaySvc = service.NewGatewayService(nil)
+	gatewaySvc = service.NewGatewayService(&fakeGatewayStore{rules: testPolicyRules()})
 	t.Cleanup(func() { gatewaySvc = nil })
 
 	payload := preflightRequest{

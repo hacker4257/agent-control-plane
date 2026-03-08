@@ -82,6 +82,8 @@ func handlePreflight(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+
+	BroadcastEvent("preflight", resp)
 }
 
 func handlePostflight(w http.ResponseWriter, r *http.Request) {
@@ -113,4 +115,12 @@ func handlePostflight(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]bool{"accepted": true})
+
+	BroadcastEvent("postflight", map[string]interface{}{
+		"session_id": strings.TrimSpace(req.SessionID),
+		"tool":       strings.TrimSpace(req.Tool),
+		"action":     strings.TrimSpace(req.Action),
+		"resource":   strings.TrimSpace(req.Resource),
+		"result":     strings.TrimSpace(req.Result),
+	})
 }

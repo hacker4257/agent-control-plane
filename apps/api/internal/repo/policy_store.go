@@ -335,23 +335,35 @@ where policy_id = $1
 	return nil
 }
 
-func EvaluatePolicyPreview(rules []PolicyRule, tool, action, resource, environment string) (string, []string) {
+type PolicyEvalResult struct {
+	Decision         string
+	MatchedPolicyIDs []string
+	WinningRule      *PolicyRule
+}
+
+func EvaluatePolicies(rules []PolicyRule, tool, action, resource, environment, agentID, inputSummary string) PolicyEvalResult {
 	if len(rules) == 0 {
-		return "ALLOW", []string{}
+		return PolicyEvalResult{Decision: "ALLOW", MatchedPolicyIDs: []string{}}
 	}
 
 	tool = strings.ToLower(strings.TrimSpace(tool))
 	action = strings.ToLower(strings.TrimSpace(action))
 	resource = strings.ToLower(strings.TrimSpace(resource))
 	environment = strings.ToLower(strings.TrimSpace(environment))
+	agentID = strings.ToLower(strings.TrimSpace(agentID))
+	inputSummary = strings.ToLower(strings.TrimSpace(inputSummary))
 
 	decisionRank := map[string]int{"ALLOW": 1, "REQUIRE_APPROVAL": 2, "BLOCK": 3}
 	bestDecision := "ALLOW"
 	bestRank := 1
 	matched := make([]string, 0)
+	var winningRule *PolicyRule
 
 	for _, r := range rules {
 		if !r.Enabled {
+			continue
+		}
+		if r.ScopeAgent != "" && strings.ToLower(r.ScopeAgent) != agentID {
 			continue
 		}
 		if r.ScopeTool != "" && strings.ToLower(r.ScopeTool) != tool {
@@ -374,16 +386,39 @@ func EvaluatePolicyPreview(rules []PolicyRule, tool, action, resource, environme
 				continue
 			}
 		}
+		if condPatterns, ok := r.ConditionExpr["command_patterns"].([]interface{}); ok {
+			patternMatched := false
+			for _, p := range condPatterns {
+				if ps, ok := p.(string); ok && strings.Contains(inputSummary, strings.ToLower(ps)) {
+					patternMatched = true
+					break
+				}
+			}
+			if !patternMatched {
+				continue
+			}
+		}
 
 		matched = append(matched, r.PolicyID)
 		if rank := decisionRank[r.Decision]; rank > bestRank {
 			bestRank = rank
 			bestDecision = r.Decision
+			rCopy := r
+			winningRule = &rCopy
 		}
 	}
 
 	if len(matched) == 0 {
-		return "ALLOW", []string{}
+		return PolicyEvalResult{Decision: "ALLOW", MatchedPolicyIDs: []string{}}
 	}
-	return bestDecision, matched
+	return PolicyEvalResult{
+		Decision:         bestDecision,
+		MatchedPolicyIDs: matched,
+		WinningRule:      winningRule,
+	}
+}
+
+func EvaluatePolicyPreview(rules []PolicyRule, tool, action, resource, environment string) (string, []string) {
+	result := EvaluatePolicies(rules, tool, action, resource, environment, "", "")
+	return result.Decision, result.MatchedPolicyIDs
 }

@@ -18,6 +18,7 @@ type fakeStore struct {
 	events            []repo.EventRecord
 	projectionUpdates []repo.SessionProjectionUpdate
 	createdApprovals  []repo.ApprovalRecord
+	policyRules       []repo.PolicyRule
 	insertErr         error
 	projectionErr     error
 	approvalCreateErr error
@@ -73,7 +74,7 @@ func (f *fakeStore) ListApprovals(ctx context.Context, status string, limit, off
 }
 
 func (f *fakeStore) ListPolicyRules(ctx context.Context, enabledOnly bool, limit, offset int) ([]repo.PolicyRule, error) {
-	return []repo.PolicyRule{}, nil
+	return f.policyRules, nil
 }
 
 func (f *fakeStore) GetPolicyRuleByID(ctx context.Context, policyID string) (repo.PolicyRule, error) {
@@ -100,7 +101,15 @@ func (f *fakeStore) ListSessionEvents(ctx context.Context, sessionID string, lim
 }
 
 func TestPreflightPersistsEvent(t *testing.T) {
-	store := &fakeStore{}
+	store := &fakeStore{
+		policyRules: []repo.PolicyRule{
+			{
+				PolicyID: "pol_test_github_main", ScopeTool: "github", ScopeEnvironment: "prod",
+				ConditionExpr: map[string]interface{}{"action": "push", "resource_contains": "branch:main"},
+				Decision: "REQUIRE_APPROVAL", Priority: 10, Enabled: true,
+			},
+		},
+	}
 	SetStore(store)
 	t.Cleanup(func() { SetStore(nil) })
 
@@ -264,7 +273,16 @@ func TestPostflightFailedSetsBlockedProjection(t *testing.T) {
 }
 
 func TestPreflightProjectionFailure(t *testing.T) {
-	store := &fakeStore{projectionErr: errors.New("projection failed")}
+	store := &fakeStore{
+		projectionErr: errors.New("projection failed"),
+		policyRules: []repo.PolicyRule{
+			{
+				PolicyID: "pol_test_github_main", ScopeTool: "github", ScopeEnvironment: "prod",
+				ConditionExpr: map[string]interface{}{"action": "push", "resource_contains": "branch:main"},
+				Decision: "REQUIRE_APPROVAL", Priority: 10, Enabled: true,
+			},
+		},
+	}
 	SetStore(store)
 	t.Cleanup(func() { SetStore(nil) })
 

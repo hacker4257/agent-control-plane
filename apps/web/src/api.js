@@ -84,3 +84,35 @@ export function setPolicyEnabled(apiBase, policyId, enabled) {
     { method: 'POST' },
   )
 }
+
+export function createWebSocket(apiBase, onMessage) {
+  const httpBase = apiBase.replace(/\/api\/v1$/, '')
+  const wsBase = httpBase.replace(/^http/, 'ws')
+  const url = `${wsBase}/ws/events`
+
+  let ws = null
+  let reconnectTimer = null
+
+  function connect() {
+    ws = new WebSocket(url)
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        onMessage(data)
+      } catch { /* ignore malformed messages */ }
+    }
+    ws.onclose = () => {
+      reconnectTimer = setTimeout(connect, 3000)
+    }
+    ws.onerror = () => {
+      ws.close()
+    }
+  }
+
+  connect()
+
+  return () => {
+    clearTimeout(reconnectTimer)
+    if (ws) ws.close()
+  }
+}

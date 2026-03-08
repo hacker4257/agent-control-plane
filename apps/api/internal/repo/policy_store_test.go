@@ -224,3 +224,64 @@ func TestPolicyEvaluatePreviewMatchesRequireApproval(t *testing.T) {
 		t.Fatalf("expected matched pol_1, got %+v", matched)
 	}
 }
+
+func TestEvaluatePoliciesCommandPatterns(t *testing.T) {
+	rules := []PolicyRule{
+		{
+			PolicyID:      "pol_shell_block",
+			ScopeTool:     "shell",
+			ConditionExpr: map[string]interface{}{"command_patterns": []interface{}{"rm -rf", "curl|sh"}},
+			Decision:      "BLOCK",
+			Priority:      5,
+			Enabled:       true,
+		},
+	}
+	result := EvaluatePolicies(rules, "shell", "exec", "host:prod", "prod", "my-agent", "rm -rf /tmp/cache")
+	if result.Decision != "BLOCK" {
+		t.Fatalf("expected BLOCK, got %s", result.Decision)
+	}
+	if len(result.MatchedPolicyIDs) != 1 || result.MatchedPolicyIDs[0] != "pol_shell_block" {
+		t.Fatalf("expected matched pol_shell_block, got %+v", result.MatchedPolicyIDs)
+	}
+	if result.WinningRule == nil || result.WinningRule.PolicyID != "pol_shell_block" {
+		t.Fatal("expected WinningRule to be set")
+	}
+}
+
+func TestEvaluatePoliciesNoCommandPatternMatch(t *testing.T) {
+	rules := []PolicyRule{
+		{
+			PolicyID:      "pol_shell_block",
+			ScopeTool:     "shell",
+			ConditionExpr: map[string]interface{}{"command_patterns": []interface{}{"rm -rf", "curl|sh"}},
+			Decision:      "BLOCK",
+			Priority:      5,
+			Enabled:       true,
+		},
+	}
+	result := EvaluatePolicies(rules, "shell", "exec", "host:prod", "prod", "my-agent", "ls -la /tmp")
+	if result.Decision != "ALLOW" {
+		t.Fatalf("expected ALLOW, got %s", result.Decision)
+	}
+}
+
+func TestEvaluatePoliciesScopeAgent(t *testing.T) {
+	rules := []PolicyRule{
+		{
+			PolicyID:   "pol_agent_block",
+			ScopeAgent: "risky-agent",
+			Decision:   "BLOCK",
+			Priority:   1,
+			Enabled:    true,
+		},
+	}
+	result := EvaluatePolicies(rules, "shell", "exec", "host:prod", "prod", "risky-agent", "ls")
+	if result.Decision != "BLOCK" {
+		t.Fatalf("expected BLOCK, got %s", result.Decision)
+	}
+
+	result = EvaluatePolicies(rules, "shell", "exec", "host:prod", "prod", "safe-agent", "ls")
+	if result.Decision != "ALLOW" {
+		t.Fatalf("expected ALLOW for non-matching agent, got %s", result.Decision)
+	}
+}

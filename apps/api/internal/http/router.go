@@ -20,6 +20,8 @@ func NewRouter() http.Handler {
 		_, _ = w.Write([]byte("ok"))
 	})
 
+	r.Get("/ws/events", handleWebSocket)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		registerDashboardRoutes(r)
 		registerGatewayRoutes(r)

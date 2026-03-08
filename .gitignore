@@ -1,0 +1,23 @@
+# Binaries and build artifacts
+bin/
+dist/
+coverage/
+*.out
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependency and tooling caches
+**/.cache/
+**/tmp/
+
+# Runtime storage
+storage/

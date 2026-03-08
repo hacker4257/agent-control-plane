@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Control Plane</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Agent Control Plane</h1>
+      <div class="api-config">
+        <label for="apiBase">API Base</label>
+        <input id="apiBase" type="text" value="http://localhost:8080/api/v1" />
+        <button id="saveApiBaseBtn" type="button">Save</button>
+        <button id="refreshAllBtn" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card" id="summaryCard">
+        <div class="card-header">
+          <h2>Dashboard Summary</h2>
+          <button type="button" id="refreshSummaryBtn">Refresh</button>
+        </div>
+        <p class="status" id="summaryStatus"></p>
+        <div class="summary-grid" id="summaryGrid">
+          <div><span>Sessions</span><strong id="sessionsCount">-</strong></div>
+          <div><span>Pending Approvals</span><strong id="pendingApprovalsCount">-</strong></div>
+          <div><span>Blocked Actions</span><strong id="blockedActionsCount">-</strong></div>
+          <div><span>Policy Hits</span><strong id="policyHitsCount">-</strong></div>
+        </div>
+      </section>
+
+      <section class="card" id="sessionsCard">
+        <div class="card-header">
+          <h2>Sessions</h2>
+          <button type="button" id="refreshSessionsBtn">Refresh</button>
+        </div>
+        <p class="status" id="sessionsStatus"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Session ID</th>
+                <th>Status</th>
+                <th>Environment</th>
+                <th>Risk</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="sessionsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="approvalsCard">
+        <div class="card-header">
+          <h2>Pending Approvals</h2>
+          <button type="button" id="refreshApprovalsBtn">Refresh</button>
+        </div>
+        <p class="status" id="approvalsStatus"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Approval ID</th>
+                <th>Action</th>
+                <th>Tool</th>
+                <th>Resource</th>
+                <th>Requested At</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="approvalsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="policiesCard">
+        <div class="card-header">
+          <h2>Policies</h2>
+          <button type="button" id="refreshPoliciesBtn">Refresh</button>
+        </div>
+        <p class="status" id="policiesStatus"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Policy ID</th>
+                <th>Name</th>
+                <th>Decision</th>
+                <th>Priority</th>
+                <th>Enabled</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="policiesBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

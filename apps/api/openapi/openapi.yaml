@@ -1,0 +1,120 @@
+openapi: 3.1.0
+info:
+  title: Agent Control Plane API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080/api/v1
+paths:
+  /gateway/preflight:
+    post:
+      summary: Evaluate tool call before execution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreflightRequest'
+      responses:
+        '200':
+          description: Decision result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightResponse'
+  /gateway/postflight:
+    post:
+      summary: Record execution result after tool call
+      responses:
+        '202':
+          description: Accepted
+  /sessions:
+    get:
+      summary: List sessions
+      responses:
+        '200':
+          description: Session list
+  /sessions/{session_id}/timeline:
+    get:
+      summary: Get ordered timeline for a session
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline response
+  /approvals:
+    get:
+      summary: List approvals
+      responses:
+        '200':
+          description: Approval list
+  /approvals/{approval_id}/decision:
+    post:
+      summary: Approve or reject request
+      parameters:
+        - in: path
+          name: approval_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Decision result
+  /policies:
+    get:
+      summary: List policies
+      responses:
+        '200':
+          description: Policies
+    post:
+      summary: Create policy
+      responses:
+        '201':
+          description: Policy created
+  /alerts:
+    get:
+      summary: List alerts
+      responses:
+        '200':
+          description: Alerts
+  /inventory/agents:
+    get:
+      summary: List managed agents
+      responses:
+        '200':
+          description: Agents
+  /inventory/tools:
+    get:
+      summary: List managed tools
+      responses:
+        '200':
+          description: Tools
+components:
+  schemas:
+    PreflightRequest:
+      type: object
+      properties:
+        session_id: { type: string }
+        step_id: { type: string }
+        correlation_id: { type: string }
+        agent: { type: object, additionalProperties: true }
+        tool_call: { type: object, additionalProperties: true }
+      required: [session_id, step_id, correlation_id, agent, tool_call]
+    PreflightResponse:
+      type: object
+      properties:
+        decision: { type: string }
+        decision_id: { type: string }
+        matched_policy_ids:
+          type: array
+          items: { type: string }
+        reason_code: { type: string }
+        reason_text: { type: string }
+        risk_tags:
+          type: array
+          items: { type: string }
+        approval_id: { type: string }
+      required: [decision, decision_id, matched_policy_ids, reason_code, reason_text, risk_tags]

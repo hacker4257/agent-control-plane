@@ -34,10 +34,10 @@ select
   'sess_seed_' || lpad((((i - 1) % 20) + 1)::text, 3, '0'),
   'step_' || (((i - 1) % 6) + 1),
   'corr_seed_' || (((i - 1) % 30) + 1),
-  case when i % 7 = 0 then 'blocked'
+  case when i % 7 = 0 then 'policy_blocked'
        when i % 7 = 1 then 'approval_requested'
-       when i % 7 = 2 then 'failed'
-       else 'executed' end,
+       when i % 7 = 2 then 'tool_failed'
+       else 'tool_completed' end,
   case when i % 7 = 0 then 'BLOCK'
        when i % 7 = 1 then 'REQUIRE_APPROVAL'
        else 'ALLOW' end,

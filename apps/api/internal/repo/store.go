@@ -349,7 +349,7 @@ func (s *Store) GetDashboardSummary(ctx context.Context) (DashboardSummary, erro
 select
   (select count(*)::int from sessions) as sessions_count,
   (select count(*)::int from approvals where status = 'pending') as pending_approvals_count,
-  (select count(*)::int from tool_events where event_type = 'blocked') as blocked_actions_count,
+  (select count(*)::int from tool_events where event_type = 'policy_blocked') as blocked_actions_count,
   (select count(*)::int from tool_events where coalesce(jsonb_array_length(matched_policy_ids), 0) > 0) as policy_hits_count
 `).Scan(
 		&summary.SessionsCount,

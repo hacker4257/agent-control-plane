@@ -251,6 +251,49 @@ OpenAPI 草案见：
 
 - `apps/api/openapi/openapi.yaml`
 
+### Gateway 调用示例
+
+Preflight（预执行决策）：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/gateway/preflight \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sess_demo_001",
+    "step_id": "step_1",
+    "correlation_id": "corr_001",
+    "agent_id": "my-coding-agent",
+    "user_id": "user_1",
+    "environment": "prod",
+    "objective": "Deploy hotfix",
+    "tool": "shell",
+    "action": "exec",
+    "resource": "host:prod",
+    "input_summary": "rm -rf /tmp/cache",
+    "command": "rm -rf /tmp/cache"
+  }'
+```
+
+Postflight（后执行记录）：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/gateway/postflight \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sess_demo_001",
+    "step_id": "step_1",
+    "correlation_id": "corr_001",
+    "agent_id": "my-coding-agent",
+    "environment": "prod",
+    "tool": "github",
+    "action": "push",
+    "resource": "repo:org/api-service/branch:feature-x",
+    "result": "completed",
+    "output_summary": "pushed 3 commits",
+    "artifact_refs": ["commit:abc123"]
+  }'
+```
+
 ## 验证
 
 ### 后端测试

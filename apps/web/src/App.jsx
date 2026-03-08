@@ -495,6 +495,8 @@ export default function App() {
 
   useEffect(() => {
     refreshAll()
+    const id = setInterval(refreshAll, 5000)
+    return () => clearInterval(id)
   }, [apiBase])
 
   useEffect(() => {
